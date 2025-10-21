@@ -50,7 +50,7 @@ st.success("✅ Model dan resource berhasil dimuat.")
 # ============================================================
 # 3. NAVIGASI MODE
 # ============================================================
-mode = st.sidebar.radio("Navigasi", ["📊 Visualisasi Data", "🔮 Prediksi Air Layak"])
+mode = st.sidebar.radio("Navigasi", ["📊 Visualisasi Data", "🔮 Tinjauan Wilayah"])
 
 # ============================================================
 # 4. VISUALISASI DATA (VERSI REVISI & INTERAKTIF)
@@ -132,13 +132,13 @@ if mode == "📊 Visualisasi Data":
         st.info("📤 Unggah file CSV untuk mulai menampilkan visualisasi data.")
 
 # ============================================================
-# 5. PREDIKSI AIR LAYAK (DENGAN DROPDOWN DAN ANALISIS SUMBER AIR)
+# 5. TINJAUAN WILAYAH (HANYA DROPDOWN - ANALISIS SUMBER AIR)
 # ============================================================
-elif mode == "🔮  Tinjauan Wilayah":
-    st.header("🔮 Tinjauan Ketersediaan Air Minum Layak per Desa")
-    st.markdown("Pilih kabupaten/kota dan kecamatan dari dropdown untuk melihat status sumber air yang tersedia, atau masukkan manual untuk prediksi model.")
+elif mode == "Tinjauan Wilayah":
+    st.header("Tinjauan Ketersediaan Air Minum Layak per Desa")
+    st.markdown("Pilih kabupaten/kota dan kecamatan dari dropdown untuk melihat status sumber air yang tersedia.")
 
-    # Upload data untuk dropdown (opsional, jika tidak ada, gunakan input manual)
+    # Upload data untuk dropdown
     uploaded_file_pred = st.file_uploader("Unggah file data.csv (untuk dropdown)", type=["csv"], key="pred_upload")
     df_pred = None
     if uploaded_file_pred:
@@ -148,61 +148,58 @@ elif mode == "🔮  Tinjauan Wilayah":
         except Exception as e:
             st.error(f"❌ Error memuat data: {e}")
 
-    # Opsi: Dropdown atau Manual
-    input_mode = st.radio("Mode Input", ["🔍 Cari via Dropdown (Analisis Langsung)"])
+    if df_pred is None:
+        st.warning("⚠️ Unggah data CSV terlebih dahulu untuk menggunakan dropdown.")
+    else:
+        # Dropdown Kabupaten
+        kabupaten_list = sorted(df_pred["bps_nama_kabupaten_kota"].dropna().unique())
+        kabupaten = st.selectbox("Pilih Kabupaten/Kota", kabupaten_list)
 
-    if input_mode == "🔍 Cari via Dropdown (Analisis Langsung)":
-        if df_pred is None:
-            st.warning("⚠️ Unggah data CSV terlebih dahulu untuk menggunakan dropdown.")
-        else:
-            # Dropdown Kabupaten
-            kabupaten_list = sorted(df_pred["bps_nama_kabupaten_kota"].dropna().unique())
-            kabupaten = st.selectbox("Pilih Kabupaten/Kota", kabupaten_list)
+        # Dropdown Kecamatan (filtered)
+        kecamatan_list = sorted(df_pred[df_pred["bps_nama_kabupaten_kota"] == kabupaten]["bps_nama_kecamatan"].dropna().unique())
+        kecamatan = st.selectbox("Pilih Kecamatan", kecamatan_list)
 
-            # Dropdown Kecamatan (filtered)
-            kecamatan_list = sorted(df_pred[df_pred["bps_nama_kabupaten_kota"] == kabupaten]["bps_nama_kecamatan"].dropna().unique())
-            kecamatan = st.selectbox("Pilih Kecamatan", kecamatan_list)
+        if st.button("🔍 Analisis Sumber Air"):
+            # Filter data berdasarkan kabupaten dan kecamatan
+            df_filtered = df_pred[(df_pred["bps_nama_kabupaten_kota"] == kabupaten) & (df_pred["bps_nama_kecamatan"] == kecamatan)]
 
-            if st.button("🔍 Analisis Sumber Air"):
-                # Filter data berdasarkan kabupaten dan kecamatan
-                df_filtered = df_pred[(df_pred["bps_nama_kabupaten_kota"] == kabupaten) & (df_pred["bps_nama_kecamatan"] == kecamatan)]
+            if df_filtered.empty:
+                st.error("❌ Tidak ada data untuk kabupaten dan kecamatan ini.")
+            else:
+                # Map kolom sumber air ke binary (0/1) jika masih string
+                sumber_cols = [c for c in df_filtered.columns if "ketersediaan_air_minum_sumber" in c]
+                for col in sumber_cols:
+                    df_filtered[col] = df_filtered[col].map({'ADA': 1, 'TIDAK': 0}).fillna(0).astype(int)
 
-                if df_filtered.empty:
-                    st.error("❌ Tidak ada data untuk kabupaten dan kecamatan ini.")
+                if not sumber_cols:
+                    st.warning("Tidak ditemukan kolom sumber air.")
                 else:
-                    # Map kolom sumber air ke binary (0/1) jika masih string
-                    sumber_cols = [c for c in df_filtered.columns if "ketersediaan_air_minum_sumber" in c]
+                    # Hitung rata-rata atau status (asumsi binary: 1=ada, 0=tidak)
+                    sumber_status = {}
                     for col in sumber_cols:
-                        df_filtered[col] = df_filtered[col].map({'ADA': 1, 'TIDAK': 0}).fillna(0).astype(int)
+                        avg = df_filtered[col].mean()  # Rata-rata (jika 0/1)
+                        sumber_status[col] = "✅ Ada" if avg > 0.5 else "❌ Tidak Ada"
 
-                    if not sumber_cols:
-                        st.warning("Tidak ditemukan kolom sumber air.")
+                    st.subheader(f"Status Sumber Air di {kabupaten} - {kecamatan}")
+                    for col, status in sumber_status.items():
+                        st.write(f"- {col.replace('ketersediaan_air_minum_sumber_', '').replace('_', ' ').title()}: {status}")
+
+                    # Logika analisis: Sumber layak = kemasan, ledeng_meteran, ledeng_tanpa_meteran, mata_air
+                    layak_cols = [
+                        "ketersediaan_air_minum_sumber_kemasan",
+                        "ketersediaan_air_minum_sumber_ledeng_meteran",
+                        "ketersediaan_air_minum_sumber_ledeng_tanpa_meteran",
+                        "ketersediaan_air_minum_sumber_mata_air",
+                    ]
+                    layak_count = sum(1 for col in layak_cols if col in sumber_cols and df_filtered[col].mean() > 0.5)
+
+                    if layak_count >= 4:
+                        st.success("✅ Aman: Semua sumber air layak tersedia. Tidak perlu ditinjau lagi.")
+                    elif layak_count == 1:
+                        st.warning("⚠️ Perlu Ditinjau: Hanya 1 sumber air layak tersedia.")
                     else:
-                        # Hitung rata-rata atau status (asumsi binary: 1=ada, 0=tidak)
-                        sumber_status = {}
-                        for col in sumber_cols:
-                            avg = df_filtered[col].mean()  # Rata-rata (jika 0/1)
-                            sumber_status[col] = "✅ Ada" if avg > 0.5 else "❌ Tidak Ada"
+                        st.info(f"ℹ️ Jumlah sumber air layak: {layak_count}. Evaluasi lebih lanjut diperlukan.")
 
-                        st.subheader(f"Status Sumber Air di {kabupaten} - {kecamatan}")
-                        for col, status in sumber_status.items():
-                            st.write(f"- {col.replace('ketersediaan_air_minum_sumber_', '').replace('_', ' ').title()}: {status}")
-
-                        # Logika analisis: Sumber layak = kemasan, ledeng_meteran, ledeng_tanpa_meteran, mata_air
-                        layak_cols = [
-                            "ketersediaan_air_minum_sumber_kemasan",
-                            "ketersediaan_air_minum_sumber_ledeng_meteran",
-                            "ketersediaan_air_minum_sumber_ledeng_tanpa_meteran",
-                            "ketersediaan_air_minum_sumber_mata_air",
-                        ]
-                        layak_count = sum(1 for col in layak_cols if col in sumber_cols and df_filtered[col].mean() > 0.5)
-
-                        if layak_count >= 4:
-                            st.success("✅ Aman: Semua sumber air layak tersedia. Tidak perlu ditinjau lagi.")
-                        elif layak_count == 1:
-                            st.warning("⚠️ Perlu Ditinjau: Hanya 1 sumber air layak tersedia.")
-                        else:
-                            st.info(f"ℹ️ Jumlah sumber air layak: {layak_count}. Evaluasi lebih lanjut diperlukan.")
 # ============================================================
 # 6. FOOTER
 # ============================================================
