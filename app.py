@@ -134,8 +134,8 @@ if mode == "📊 Visualisasi Data":
 # ============================================================
 # 5. PREDIKSI AIR LAYAK (DENGAN DROPDOWN DAN ANALISIS SUMBER AIR)
 # ============================================================
-elif mode == "🔮 Prediksi Air Layak":
-    st.header("🔮 Prediksi Ketersediaan Air Minum Layak per Desa")
+elif mode == "🔮  Tinjauan Wilayah":
+    st.header("🔮 Tinjauan Ketersediaan Air Minum Layak per Desa")
     st.markdown("Pilih kabupaten/kota dan kecamatan dari dropdown untuk melihat status sumber air yang tersedia, atau masukkan manual untuk prediksi model.")
 
     # Upload data untuk dropdown (opsional, jika tidak ada, gunakan input manual)
@@ -149,7 +149,7 @@ elif mode == "🔮 Prediksi Air Layak":
             st.error(f"❌ Error memuat data: {e}")
 
     # Opsi: Dropdown atau Manual
-    input_mode = st.radio("Pilih Mode Input", ["🔍 Cari via Dropdown (Analisis Langsung)", "✏️ Input Manual (Prediksi Model)"])
+    input_mode = st.radio("Mode Input", ["🔍 Cari via Dropdown (Analisis Langsung)"])
 
     if input_mode == "🔍 Cari via Dropdown (Analisis Langsung)":
         if df_pred is None:
