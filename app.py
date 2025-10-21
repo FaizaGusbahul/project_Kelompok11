@@ -53,51 +53,83 @@ st.success("✅ Model dan resource berhasil dimuat.")
 mode = st.sidebar.radio("Navigasi", ["📊 Visualisasi Data", "🔮 Prediksi Air Layak"])
 
 # ============================================================
-# 4. VISUALISASI DATA
+# 4. VISUALISASI DATA (VERSI REVISI & INTERAKTIF)
 # ============================================================
 if mode == "📊 Visualisasi Data":
     st.header("📊 Visualisasi Distribusi Sumber Air Minum")
-    st.markdown("Unggah file **CSV** hasil survei per desa untuk melihat distribusi sumber air di setiap kabupaten/kota.")
+    st.markdown("""
+    Unggah file **CSV** hasil survei per desa untuk melihat distribusi sumber air di setiap kabupaten/kota.  
+    Pastikan file mengandung kolom seperti `bps_nama_kabupaten_kota`, `latitude`, `longitude`, dan kolom sumber air.
+    """)
 
-    uploaded_file = st.file_uploader("Unggah file data.csv", type=["csv"])
+    uploaded_file = st.file_uploader("📁 Unggah file data.csv", type=["csv"])
     if uploaded_file:
         try:
             df = pd.read_csv(uploaded_file)
             st.success("✅ Data berhasil diunggah.")
             st.dataframe(df.head())
 
-            if "bps_nama_kabupaten_kota" in df.columns:
-                kabupaten_list = sorted(df["bps_nama_kabupaten_kota"].dropna().unique())
-                kabupaten = st.selectbox("Pilih Kabupaten/Kota", kabupaten_list)
+            # Validasi kolom
+            if "bps_nama_kabupaten_kota" not in df.columns:
+                st.error("❌ Kolom 'bps_nama_kabupaten_kota' tidak ditemukan di dataset.")
+                st.stop()
 
-                df_filtered = df[df["bps_nama_kabupaten_kota"] == kabupaten]
+            # Dropdown kabupaten
+            kabupaten_list = sorted(df["bps_nama_kabupaten_kota"].dropna().unique())
+            kabupaten = st.selectbox("🏙️ Pilih Kabupaten/Kota", kabupaten_list)
 
-                # Batasi titik agar tidak berat saat render
-                if len(df_filtered) > 1000:
-                    df_filtered = df_filtered.sample(1000)
-                    st.warning("⚠️ Data besar, hanya menampilkan 1000 titik pertama.")
+            # Filter data berdasarkan kabupaten
+            df_filtered = df[df["bps_nama_kabupaten_kota"] == kabupaten]
 
-                # Tampilkan peta jika ada koordinat
+            # Batasi data agar tidak terlalu berat
+            if len(df_filtered) > 1000:
+                df_filtered = df_filtered.sample(1000)
+                st.warning("⚠️ Data besar, hanya menampilkan 1000 titik pertama untuk efisiensi.")
+
+            # Cari kolom sumber air
+            sumber_cols = [c for c in df_filtered.columns if "ketersediaan_air_minum_sumber" in c]
+
+            if sumber_cols:
+                st.subheader(f"💦 Distribusi Sumber Air di {kabupaten}")
+
+                # Ubah nilai 'ADA' → 1, 'TIDAK' → 0 untuk keperluan grafik
+                df_numeric = df_filtered.copy()
+                for col in sumber_cols:
+                    df_numeric[col] = df_numeric[col].map({'ADA': 1, 'TIDAK': 0}).fillna(0)
+
+                # Hitung jumlah desa yang punya sumber air tertentu
+                chart_data = df_numeric[sumber_cols].sum().sort_values(ascending=True)
+
+                # Plot interaktif horizontal bar
+                import plotly.express as px
+                fig = px.bar(
+                    chart_data,
+                    x=chart_data.values,
+                    y=chart_data.index,
+                    orientation="h",
+                    labels={"x": "Jumlah Desa", "y": "Jenis Sumber Air"},
+                    title=f"Distribusi Sumber Air Minum di {kabupaten}",
+                    color=chart_data.values,
+                    color_continuous_scale="Blues"
+                )
+                fig.update_layout(yaxis=dict(title="", tickfont=dict(size=11)))
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Peta jika kolom koordinat tersedia
                 if {"latitude", "longitude"}.issubset(df_filtered.columns):
-                    # Asumsi plot_simple_map ada, tapi jika tidak, ganti dengan st.map atau hapus
-                    st.info("Fitur peta memerlukan utils/. Gunakan bar chart sebagai gantinya.")
-                    # m = plot_simple_map(df_filtered, lat_col="latitude", lon_col="longitude", popup_col="bps_nama_desa_kelurahan")
-                    # st.components.v1.html(m._repr_html_(), height=500)
+                    st.subheader(f"🗺️ Peta Sumber Air di {kabupaten}")
+                    m = plot_simple_map(df_filtered, lat_col="latitude", lon_col="longitude", popup_col="bps_nama_desa_kelurahan")
+                    st.components.v1.html(m._repr_html_(), height=500)
                 else:
-                    st.info("Data tidak memiliki kolom koordinat, menampilkan statistik dasar.")
-                    sumber_cols = [c for c in df_filtered.columns if "ketersediaan_air_minum_sumber" in c]
-                    if sumber_cols:
-                        st.subheader("Distribusi Sumber Air di Kabupaten Ini")
-                        st.bar_chart(df_filtered[sumber_cols].sum())
-                    else:
-                        st.warning("Tidak ditemukan kolom sumber air di data yang diunggah.")
+                    st.info("ℹ️ Tidak ada kolom 'latitude' dan 'longitude' — hanya menampilkan grafik distribusi.")
             else:
-                st.error("Kolom 'bps_nama_kabupaten_kota' tidak ditemukan di dataset.")
+                st.warning("Tidak ditemukan kolom sumber air di data yang diunggah.")
+
         except Exception as e:
-            st.error(f"❌ Error memproses file: {e}")
-            logger.error(f"Error memproses uploaded file: {e}")
+            st.error(f"❌ Terjadi error saat memproses file: {e}")
+            logger.error(f"Error saat memproses file unggahan: {e}")
     else:
-        st.info("Unggah file data.csv untuk memulai visualisasi.")
+        st.info("📤 Unggah file CSV untuk mulai menampilkan visualisasi data.")
 
 # ============================================================
 # 5. PREDIKSI AIR LAYAK (DENGAN DROPDOWN DAN ANALISIS SUMBER AIR)
