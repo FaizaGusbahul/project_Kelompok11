@@ -1,3 +1,4 @@
+# app.py (Revisi Final - Fix Error dan Tambah Input Manual)
 import streamlit as st
 import pandas as pd
 import joblib
@@ -53,7 +54,7 @@ st.success("✅ Model dan resource berhasil dimuat.")
 mode = st.sidebar.radio("Navigasi", ["📊 Visualisasi Data", "🔮 Prediksi Air Layak"])
 
 # ============================================================
-# 4. VISUALISASI DATA (VERSI REVISI & INTERAKTIF)
+# 4. VISUALISASI DATA (VERSI REVISI & INTERAKTIF - TANPA PLOTLY UNTUK SIMPEL)
 # ============================================================
 if mode == "📊 Visualisasi Data":
     st.header("📊 Visualisasi Distribusi Sumber Air Minum")
@@ -100,26 +101,13 @@ if mode == "📊 Visualisasi Data":
                 # Hitung jumlah desa yang punya sumber air tertentu
                 chart_data = df_numeric[sumber_cols].sum().sort_values(ascending=True)
 
-                # Plot interaktif horizontal bar
-                import plotly.express as px
-                fig = px.bar(
-                    chart_data,
-                    x=chart_data.values,
-                    y=chart_data.index,
-                    orientation="h",
-                    labels={"x": "Jumlah Desa", "y": "Jenis Sumber Air"},
-                    title=f"Distribusi Sumber Air Minum di {kabupaten}",
-                    color=chart_data.values,
-                    color_continuous_scale="Blues"
-                )
-                fig.update_layout(yaxis=dict(title="", tickfont=dict(size=11)))
-                st.plotly_chart(fig, use_container_width=True)
+                # Plot bar chart sederhana (tanpa plotly untuk hindari error)
+                st.bar_chart(chart_data)
 
-                # Peta jika kolom koordinat tersedia
+                # Peta sederhana jika kolom koordinat tersedia (gunakan st.map)
                 if {"latitude", "longitude"}.issubset(df_filtered.columns):
                     st.subheader(f"🗺️ Peta Sumber Air di {kabupaten}")
-                    m = plot_simple_map(df_filtered, lat_col="latitude", lon_col="longitude", popup_col="bps_nama_desa_kelurahan")
-                    st.components.v1.html(m._repr_html_(), height=500)
+                    st.map(df_filtered[["latitude", "longitude"]])
                 else:
                     st.info("ℹ️ Tidak ada kolom 'latitude' dan 'longitude' — hanya menampilkan grafik distribusi.")
             else:
@@ -134,8 +122,8 @@ if mode == "📊 Visualisasi Data":
 # ============================================================
 # 5. PREDIKSI AIR LAYAK (DENGAN DROPDOWN DAN ANALISIS SUMBER AIR)
 # ============================================================
-elif mode == "🔮 Prediksi Air Layak":
-    st.header("🔮 Prediksi Ketersediaan Air Minum Layak per Desa")
+elif mode == "🔮 Tinjauan Wilayah":
+    st.header("🔮 Tinjauan Ketersediaan Air Minum Layak per Desa")
     st.markdown("Pilih kabupaten/kota dan kecamatan dari dropdown untuk melihat status sumber air yang tersedia, atau masukkan manual untuk prediksi model.")
 
     # Upload data untuk dropdown (opsional, jika tidak ada, gunakan input manual)
@@ -204,89 +192,88 @@ elif mode == "🔮 Prediksi Air Layak":
                         else:
                             st.info(f"ℹ️ Jumlah sumber air layak: {layak_count}. Evaluasi lebih lanjut diperlukan.")
 
+    elif input_mode == "✏️ Input Manual (Prediksi Model)":
+        with st.form("prediction_form"):
+            kabupaten = st.text_input("Nama Kabupaten/Kota", placeholder="Contoh: Kabupaten Bogor")
+            kecamatan = st.text_input("Nama Kecamatan", placeholder="Contoh: Gunung Putri")
 
-elif input_mode == "✏️ Input Manual (Prediksi Model)":
-    with st.form("prediction_form"):
-        kabupaten = st.text_input("Nama Kabupaten/Kota", placeholder="Contoh: Kabupaten Bogor")
-        kecamatan = st.text_input("Nama Kecamatan", placeholder="Contoh: Gunung Putri")
+            sumber_air_options = [
+                "ketersediaan_air_minum_sumber_ledeng_meteran",
+                "ketersediaan_air_minum_sumber_ledeng_tanpa_meteran",
+                "ketersediaan_air_minum_sumber_sumur",
+                "ketersediaan_air_minum_sumber_sumur_bor",
+                "ketersediaan_air_minum_sumber_mata_air",
+                "ketersediaan_air_minum_sumber_sungai",
+                "ketersediaan_air_minum_sumber_hujan",
+                "ketersediaan_air_minum_sumber_lainnya",
+            ]
 
-        sumber_air_options = [
-            "ketersediaan_air_minum_sumber_ledeng_meteran",
-            "ketersediaan_air_minum_sumber_ledeng_tanpa_meteran",
-            "ketersediaan_air_minum_sumber_sumur",
-            "ketersediaan_air_minum_sumber_sumur_bor",
-            "ketersediaan_air_minum_sumber_mata_air",
-            "ketersediaan_air_minum_sumber_sungai",
-            "ketersediaan_air_minum_sumber_hujan",
-            "ketersediaan_air_minum_sumber_lainnya",
-        ]
+            sumber_air = st.multiselect(
+                "Pilih sumber air yang ADA di desa ini:",
+                sumber_air_options,
+                help="Pilih semua sumber air yang tersedia. Jika tidak ada, biarkan kosong."
+            )
 
-        sumber_air = st.multiselect(
-            "Pilih sumber air yang ADA di desa ini:",
-            sumber_air_options,
-            help="Pilih semua sumber air yang tersedia. Jika tidak ada, biarkan kosong."
-        )
+            submitted = st.form_submit_button("🔍 Prediksi")
 
-        submitted = st.form_submit_button("🔍 Prediksi")
+            if submitted:
+                if not kabupaten or not kecamatan:
+                    st.error("Harap isi nama kabupaten dan kecamatan.")
+                else:
+                    # Preprocess input (simulasi utils.preprocessing)
+                    data_dict = {
+                        "bps_nama_kabupaten_kota": [kabupaten],
+                        "bps_nama_kecamatan": [kecamatan],
+                    }
+                    for s in sumber_air_options:
+                        data_dict[s] = [1 if s in sumber_air else 0]
 
-        if submitted:
-            if not kabupaten or not kecamatan:
-                st.error("Harap isi nama kabupaten dan kecamatan.")
-            else:
-                # Preprocess input (simulasi utils.preprocessing)
-                data_dict = {
-                    "bps_nama_kabupaten_kota": [kabupaten],
-                    "bps_nama_kecamatan": [kecamatan],
-                }
-                for s in sumber_air_options:
-                    data_dict[s] = [1 if s in sumber_air else 0]
+                    # Encode categorical dengan handle unseen labels
+                    for key in ["bps_nama_kabupaten_kota", "bps_nama_kecamatan"]:
+                        if f"label_{key}" in encoders:
+                            le = encoders[f"label_{key}"]
+                            try:
+                                data_dict[key] = le.transform(data_dict[key])
+                            except ValueError as e:
+                                if "unseen labels" in str(e):
+                                    st.error(f"❌ Nama {key.replace('bps_nama_', '').replace('_', ' ')} '{data_dict[key][0]}' tidak ditemukan di data training. Harap gunakan nama yang sesuai (misalnya dari dropdown atau data asli).")
+                                    st.stop()
+                                else:
+                                    raise e
 
-                # Encode categorical dengan handle unseen labels
-                for key in ["bps_nama_kabupaten_kota", "bps_nama_kecamatan"]:
-                    if f"label_{key}" in encoders:
-                        le = encoders[f"label_{key}"]
-                        try:
-                            data_dict[key] = le.transform(data_dict[key])
-                        except ValueError as e:
-                            if "unseen labels" in str(e):
-                                st.error(f"❌ Nama {key.replace('bps_nama_', '').replace('_', ' ')} '{data_dict[key][0]}' tidak ditemukan di data training. Harap gunakan nama yang sesuai (misalnya dari dropdown atau data asli).")
-                                st.stop()
-                            else:
-                                raise e
+                    # Scale numerical - Fix: Pastikan urutan kolom sama seperti saat training
+                    numerical_cols = [col for col in data_dict.keys() if col not in ["bps_nama_kabupaten_kota", "bps_nama_kecamatan"]]
+                    df_input = pd.DataFrame(data_dict)
+                    # Urutkan kolom sesuai dengan scaler.feature_names_in_ jika ada
+                    if hasattr(scaler, 'feature_names_in_'):
+                        expected_cols = list(scaler.feature_names_in_)
+                        # Filter hanya kolom yang ada di expected_cols
+                        numerical_cols = [col for col in numerical_cols if col in expected_cols]
+                        df_input = df_input[expected_cols]  # Reorder columns
+                    df_input[numerical_cols] = scaler.transform(df_input[numerical_cols])
 
-                # Scale numerical - Fix: Pastikan urutan kolom sama seperti saat training
-                numerical_cols = [col for col in data_dict.keys() if col not in ["bps_nama_kabupaten_kota", "bps_nama_kecamatan"]]
-                df_input = pd.DataFrame(data_dict)
-                # Urutkan kolom sesuai dengan scaler.feature_names_in_ jika ada
-                if hasattr(scaler, 'feature_names_in_'):
-                    expected_cols = list(scaler.feature_names_in_)
-                    # Filter hanya kolom yang ada di expected_cols
-                    numerical_cols = [col for col in numerical_cols if col in expected_cols]
-                    df_input = df_input[expected_cols]  # Reorder columns
-                df_input[numerical_cols] = scaler.transform(df_input[numerical_cols])
+                    # Predict
+                    try:
+                        prob = model.predict_proba(df_input)[0][1]  # Probabilitas ADA
+                        label_encoded = model.predict(df_input)[0]
+                        # Inverse transform label
+                        if "label_target" in encoders:
+                            le_target = encoders["label_target"]
+                            label = le_target.inverse_transform([label_encoded])[0]
+                        else:
+                            label = "ADA" if label_encoded == 1 else "TIDAK"
 
-                # Predict
-                try:
-                    prob = model.predict_proba(df_input)[0][1]  # Probabilitas ADA
-                    label_encoded = model.predict(df_input)[0]
-                    # Inverse transform label
-                    if "label_target" in encoders:
-                        le_target = encoders["label_target"]
-                        label = le_target.inverse_transform([label_encoded])[0]
-                    else:
-                        label = "ADA" if label_encoded == 1 else "TIDAK"
+                        st.success(f"Hasil Prediksi: **{label}** (Probabilitas: {prob:.2f})")
 
-                    st.success(f"Hasil Prediksi: **{label}** (Probabilitas: {prob:.2f})")
+                        if label == "ADA":
+                            st.info("✅ Desa ini kemungkinan memiliki ketersediaan air minum yang layak.")
+                        else:
+                            st.warning("⚠️ Desa ini kemungkinan kekurangan sumber air minum layak.")
 
-                    if label == "ADA":
-                        st.info("✅ Desa ini kemungkinan memiliki ketersediaan air minum yang layak.")
-                    else:
-                        st.warning("⚠️ Desa ini kemungkinan kekurangan sumber air minum layak.")
-
-                    st.caption("Prediksi ini bersifat estimasi. Verifikasi dengan data lapangan tetap diperlukan.")
-                except Exception as e:
-                    st.error(f"Terjadi kesalahan saat prediksi: {e}")
-                    logger.error(f"Prediction error: {e}")
+                        st.caption("Prediksi ini bersifat estimasi. Verifikasi dengan data lapangan tetap diperlukan.")
+                    except Exception as e:
+                        st.error(f"Terjadi kesalahan saat prediksi: {e}")
+                        logger.error(f"Prediction error: {e}")
 
 # ============================================================
 # 6. FOOTER
