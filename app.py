@@ -134,8 +134,8 @@ if mode == "📊 Visualisasi Data":
 # ============================================================
 # 5. PREDIKSI AIR LAYAK (DENGAN DROPDOWN DAN ANALISIS SUMBER AIR)
 # ============================================================
-elif mode == "🔮 Prediksi Air Layak":
-    st.header("🔮 Prediksi Ketersediaan Air Minum Layak per Desa")
+elif mode == "🔮 Tinjauan Wilayah":
+    st.header("🔮 Tinjauan Ketersediaan Air Minum Layak per Desa")
     st.markdown("Pilih kabupaten/kota dan kecamatan dari dropdown untuk melihat status sumber air yang tersedia, atau masukkan manual untuk prediksi model.")
 
     # Upload data untuk dropdown (opsional, jika tidak ada, gunakan input manual)
@@ -205,75 +205,32 @@ elif mode == "🔮 Prediksi Air Layak":
                             st.info(f"ℹ️ Jumlah sumber air layak: {layak_count}. Evaluasi lebih lanjut diperlukan.")
 
     elif input_mode == "✏️ Input Manual (Prediksi Model)":
-        with st.form("prediction_form"):
-            kabupaten = st.text_input("Nama Kabupaten/Kota", placeholder="Contoh: Kabupaten Bogor")
-            kecamatan = st.text_input("Nama Kecamatan", placeholder="Contoh: Gunung Putri")
-
-            sumber_air_options = [
-                "ketersediaan_air_minum_sumber_ledeng_meteran",
-                "ketersediaan_air_minum_sumber_ledeng_tanpa_meteran",
-                "ketersediaan_air_minum_sumber_sumur",
-                "ketersediaan_air_minum_sumber_sumur_bor",
-                "ketersediaan_air_minum_sumber_mata_air",
-                "ketersediaan_air_minum_sumber_sungai",
-                "ketersediaan_air_minum_sumber_hujan",
-                "ketersediaan_air_minum_sumber_lainnya",
-            ]
-
-            sumber_air = st.multiselect(
-                "Pilih sumber air yang ADA di desa ini:",
-                sumber_air_options,
-                help="Pilih semua sumber air yang tersedia. Jika tidak ada, biarkan kosong."
-            )
-
-            submitted = st.form_submit_button("🔍 Prediksi")
-
-            if submitted:
-                if not kabupaten or not kecamatan:
-                    st.error("Harap isi nama kabupaten dan kecamatan.")
-                else:
-                    # Preprocess input (simulasi utils.preprocessing)
-                    data_dict = {
-                        "bps_nama_kabupaten_kota": [kabupaten],
-                        "bps_nama_kecamatan": [kecamatan],
-                    }
-                    for s in sumber_air_options:
-                        data_dict[s] = [1 if s in sumber_air else 0]
-
-                    # Encode categorical
-                    for key in ["bps_nama_kabupaten_kota", "bps_nama_kecamatan"]:
-                        if f"label_{key}" in encoders:
-                            le = encoders[f"label_{key}"]
-                            data_dict[key] = le.transform(data_dict[key])
-
-                    # Scale numerical
-                    numerical_cols = [col for col in data_dict.keys() if col not in ["bps_nama_kabupaten_kota", "bps_nama_kecamatan"]]
-                    df_input = pd.DataFrame(data_dict)
-                    df_input[numerical_cols] = scaler.transform(df_input[numerical_cols])
-
-                    # Predict
-                    try:
-                        prob = model.predict_proba(df_input)[0][1]  # Probabilitas ADA
-                        label_encoded = model.predict(df_input)[0]
-                        # Inverse transform label
-                        if "label_target" in encoders:
-                            le_target = encoders["label_target"]
-                            label = le_target.inverse_transform([label_encoded])[0]
-                        else:
-                            label = "ADA" if label_encoded == 1 else "TIDAK"
-
-                        st.success(f"Hasil Prediksi: **{label}** (Probabilitas: {prob:.2f})")
-
-                        if label == "ADA":
-                            st.info("✅ Desa ini kemungkinan memiliki ketersediaan air minum yang layak.")
-                        else:
-                            st.warning("⚠️ Desa ini kemungkinan kekurangan sumber air minum layak.")
-
-                        st.caption("Prediksi ini bersifat estimasi. Verifikasi dengan data lapangan tetap diperlukan.")
-                    except Exception as e:
-                        st.error(f"Terjadi kesalahan saat prediksi: {e}")
-                        logger.error(f"Prediction error: {e}")
-
+    with st.form("prediction_form"):
+        kabupaten = st.text_input("Nama Kabupaten/Kota", placeholder="Contoh: Kabupaten Bogor")
+        kecamatan = st.text_input("Nama Kecamatan", placeholder="Contoh: Gunung Putri")
+        sumber_air_options = [
+            "ketersediaan_air_minum_sumber_ledeng_meteran",
+            "ketersediaan_air_minum_sumber_ledeng_tanpa_meteran",
+            "ketersediaan_air_minum_sumber_sumur",
+            "ketersediaan_air_minum_sumber_sumur_bor",
+            "ketersediaan_air_minum_sumber_mata_air",
+            "ketersediaan_air_minum_sumber_sungai",
+            "ketersediaan_air_minum_sumber_hujan",
+            "ketersediaan_air_minum_sumber_lainnya",
+        ]
+        sumber_air = st.multiselect(
+            "Pilih sumber air yang ADA di desa ini:",
+            sumber_air_options,
+            help="Pilih semua sumber air yang tersedia. Jika tidak ada, biarkan kosong."
+        )
+        submitted = st.form_submit_button("🔍 Prediksi")
+        if submitted:
+            if not kabupaten or not kecamatan:
+                st.error("Harap isi nama kabupaten dan kecamatan.")
+            else:
+                # Preprocess input (simulasi utils.preprocessing)
+                data_dict = {
+                    "bps_nama_kabupaten_kota": [kabupaten],
 # ============================================================
 # 6. FOOTER
 # ============================================================
