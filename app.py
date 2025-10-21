@@ -50,7 +50,7 @@ st.success("✅ Model dan resource berhasil dimuat.")
 # ============================================================
 # 3. NAVIGASI MODE
 # ============================================================
-mode = st.sidebar.radio("Navigasi", ["📊 Visualisasi Data", "🔮 Tinjauan Wilayah"])
+mode = st.sidebar.radio("Navigasi", ["📊 Visualisasi Data", "Tinjauan Wilayah"])
 
 # ============================================================
 # 4. VISUALISASI DATA (VERSI REVISI & INTERAKTIF)
